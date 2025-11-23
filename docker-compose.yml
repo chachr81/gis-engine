@@ -1,0 +1,28 @@
+services:
+
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: postgis
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./postgis:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - backend_net
+
+  gis-engine:
+    image: ghcr.io/chachr81/gis-engine:latest
+    container_name: gis-engine
+    restart: unless-stopped
+    networks:
+      - backend_net
+
+networks:
+  backend_net:

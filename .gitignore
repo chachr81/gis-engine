@@ -1,0 +1,28 @@
+# Variables de entorno
+.env
+
+# Python
+*.pyc
+__pycache__/
+*.log
+
+# Editor y sistema
+.DS_Store
+.idea/
+.vscode/
+
+# Swap
+*.swp
+*.swo
+
+# Entornos virtuales
+gis-engine/.venv/
+
+# Cachés
+*.tmp
+
+# No subir los datos reales de PostGIS
+postgis/
+
+# Caché de Docker
+**/.dockerignore
