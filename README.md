@@ -109,6 +109,106 @@ docker compose up -d
 
 ---
 
+## Uso en Windows (Soporte Completo)
+
+Este entorno funciona perfectamente en Windows 10/11 con Docker Desktop. Aquí tienes recomendaciones específicas para usuarios de Windows:
+
+### Pasos para usuarios Windows
+
+1. **Instalar Docker Desktop**:
+   - Descarga e instala Docker Desktop desde [docker.com](https://www.docker.com/products/docker-desktop).
+   - Durante la instalación, habilita WSL2 si es posible.
+
+2. **¿Qué hacer si WSL2 no está habilitado?**:
+   - Asegúrate de que tu sistema operativo sea compatible con WSL2.
+   - Si no puedes habilitar WSL2, puedes usar el modo de compatibilidad de Docker Desktop con Hyper-V:
+     1. Abre Docker Desktop.
+     2. Ve a **Settings > General**.
+     3. Desactiva la opción "Use the WSL 2 based engine".
+     4. Guarda los cambios y reinicia Docker Desktop.
+
+3. **Clonar este repositorio**:
+   ```bash
+   git clone https://github.com/chachr81/gis-engine.git
+   ```
+
+4. **Crear el archivo `.env` desde el ejemplo**:
+   ```bash
+   cp .env_example .env
+   ```
+
+5. **Ejecutar Docker Compose**:
+   ```bash
+   docker compose up -d
+   ```
+
+6. **Entrar al contenedor GIS Engine**:
+   ```bash
+   docker exec -it gis-engine bash
+   ```
+
+7. **Activar el entorno Python**:
+   ```bash
+   source ~/.venv/bin/activate
+   ```
+
+8. **Instalar Jupyter Notebook (opcional)**:
+   ```bash
+   pip install notebook ipywidgets
+   ```
+
+9. **Ejecutar Jupyter Notebook**:
+   ```bash
+   jupyter notebook --ip=0.0.0.0 --no-browser
+   ```
+
+---
+
+## Conexión a PostGIS desde el contenedor
+
+El contenedor `gis-engine` incluye el cliente PostgreSQL (`psql`). Puedes conectarte a la base de datos PostGIS con el siguiente comando:
+
+```bash
+psql -h postgis -U $POSTGRES_USER -d $POSTGRES_DB
+```
+
+- **Nota**: El password será el configurado en el archivo `.env`.
+
+### Verificar PostGIS
+
+Una vez dentro de `psql`, ejecuta el siguiente comando para verificar la instalación de PostGIS:
+
+```sql
+SELECT PostGIS_Version();
+```
+
+---
+
+## Pruebas de Integración
+
+### 1. Probar conexión interna con PostGIS
+
+Desde el contenedor `gis-engine`, verifica la conexión a la base de datos:
+```bash
+psql -h postgis -U postgres -d postgres
+```
+
+### 2. Listar tablas disponibles
+
+Dentro de `psql`, usa el comando:
+```sql
+\dt
+```
+
+### 3. Prueba de lectura de raster/shape con GDAL
+
+Verifica la instalación de GDAL y su versión:
+```bash
+gdalinfo --version
+```
+
+---
+
 ## Cómo Colaborar con el Proyecto
 
 ¡Gracias por tu interés en colaborar con GIS Engine! Aquí tienes algunas formas de contribuir:
