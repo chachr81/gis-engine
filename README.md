@@ -158,8 +158,9 @@ Este entorno funciona perfectamente en Windows 10/11 con Docker Desktop. Aquí t
    ```
 
 9. **Ejecutar Jupyter Notebook**:
+   Ejecuta el siguiente comando para iniciar Jupyter Notebook y abrirlo automáticamente en tu navegador:
    ```bash
-   jupyter notebook --ip=0.0.0.0 --no-browser
+   jupyter notebook --ip=0.0.0.0 --no-browser --NotebookApp.allow_origin='*' --NotebookApp.open_browser=True
    ```
 
 ---
