@@ -187,12 +187,60 @@ SELECT PostGIS_Version();
 
 ## Pruebas de Integración
 
-### 1. Probar conexión interna con PostGIS
+### 1. Probar conexión interna con PostGIS usando Python y dotenv
 
-Desde el contenedor `gis-engine`, verifica la conexión a la base de datos:
-```bash
-psql -h postgis -U postgres -d postgres
+En lugar de usar `psql`, puedes probar la conexión a la base de datos PostGIS utilizando Python con la biblioteca `dotenv` para cargar las credenciales desde el archivo `.env`.
+
+#### Código de prueba
+
+Crea un archivo llamado `test_postgis_connection.py` con el siguiente contenido:
+
+```python
+from sqlalchemy import create_engine
+from dotenv import dotenv_values
+from pathlib import Path
+
+def conectar_bd():
+    # Definir la ruta relativa al archivo .env
+    env_path = Path.home() / "docker_data" / ".env"
+
+    # Cargar variables de entorno desde el archivo .env
+    config = dotenv_values(env_path)
+
+    # Crear la cadena de conexión utilizando las credenciales del archivo .env
+    connection_string = f"postgresql://{config['POSTGRES_USER']}:{config['POSTGRES_PASSWORD']}@{config['POSTGRES_HOST']}:{config['POSTGRES_PORT']}/{config['POSTGRES_DB']}"
+
+    try:
+        # Crear el motor de conexión
+        engine = create_engine(connection_string)
+        # Probar la conexión
+        with engine.connect() as conn:
+            print("Conexión a la base de datos establecida con éxito.")
+        return True
+    except Exception as e:
+        print(f"Error al conectar con la base de datos: {e}")
+        return False
+
+if __name__ == "__main__":
+    if not conectar_bd():
+        exit(1)  # Terminar el script si la conexión a la base de datos falla
 ```
+
+#### Ejecución
+
+1. Asegúrate de que el archivo `.env` esté configurado correctamente con las credenciales de la base de datos y esté ubicado en `~/docker_data/.env`.
+2. Instala las dependencias necesarias dentro del contenedor `gis-engine`:
+   ```bash
+   pip install python-dotenv sqlalchemy
+   ```
+3. Ejecuta el script dentro del contenedor `gis-engine`:
+   ```bash
+   python3 test_postgis_connection.py
+   ```
+
+Si la conexión es exitosa, verás el mensaje: `Conexión a la base de datos establecida con éxito.`
+
+---
 
 ### 2. Listar tablas disponibles
 
