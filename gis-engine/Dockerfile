@@ -61,6 +61,7 @@ RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends \
     python3.12 python3.12-dev python3.12-venv python3-pip \
     gdal-bin libgdal-dev libspatialindex-dev proj-bin libproj-dev libgeos-dev \
     libxml2-dev libssl-dev libcurl4-openssl-dev openjdk-17-jdk-headless \
+    postgresql-client \
     rsync nano bash-completion && \
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
     sudo rm -rf /var/lib/apt/lists/*
@@ -120,7 +121,8 @@ RUN python3 -m venv /home/${USERNAME}/.venv && \
       geopandas fiona shapely pyproj rtree \
       rasterio matplotlib seaborn plotly \
       pyspark apache-sedona[spark] \
-      sshtunnel paramiko && \
+      sshtunnel paramiko \
+      earthengine-api && \
     /home/${USERNAME}/.venv/bin/python -c "from sedona.spark import *; import geopandas, shapely, pyspark; print('Paquetes Python instalados en .venv')"
 
 # ---------------------------------------------------------
