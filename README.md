@@ -1,94 +1,73 @@
 # GIS Engine – Entorno Geoespacial Completo (Docker)
 
-🚨 **Nota Importante sobre el Usuario**
+![Docker](https://img.shields.io/badge/Docker-Engine-blue)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+![Licencia](https://img.shields.io/badge/License-MIT-yellow)
 
-Por defecto, el contenedor utiliza el usuario `chris`. Si deseas cambiar el nombre de usuario, edita la línea correspondiente en el `Dockerfile`:
+## Descripción General
 
-```dockerfile
-ARG USERNAME=chris
-```
+Este repositorio proporciona una imagen Docker altamente especializada para procesamiento geoespacial avanzado, big data distribuido y flujos ETL de análisis espacial. El entorno está diseñado para trabajar junto a una base de datos PostGIS oficial, orquestado mediante el archivo `docker-compose.yml` incluido.
 
-Reemplaza `chris` con el nombre de usuario deseado. Por ejemplo, para usar `usuario`:
+### Características
 
-```dockerfile
-ARG USERNAME=usuario
-```
+- **Imagen Base**: Ubuntu 24.04
+- **Python 3.12**: Incluye un entorno virtual con bibliotecas científicas y geoespaciales:
+  ```
+  numpy, pandas, geopandas, shapely, fiona, pyproj, rtree, rasterio,
+  matplotlib, seaborn, plotly, scipy, scikit-learn, sqlalchemy,
+  psycopg2-binary, apache-sedona[spark], pyspark, sshtunnel, paramiko.
+  ```
+- **Frameworks de Big Data**:
+  - Apache Spark 4.0.1 (instalado manualmente con validación SHA512).
+  - Apache Sedona 1.8.0 (para análisis espacial distribuido).
+- **Herramientas GIS**: GDAL, PROJ, GEOS, SpatialIndex.
+- **Soporte Opcional para R**: Incluye paquetes espaciales cuando `INSTALL_CRAN=1`.
+- **Usuario no-root**: Usuario preconfigurado con entorno Python aislado.
 
-Luego, reconstruye la imagen para aplicar los cambios:
+## Configuración Inicial
 
-```bash
-docker build --no-cache -t gis-engine ./gis-engine
-```
+### Prerrequisitos
 
-⚠️ **Advertencia:** Si no cambias esta línea, el usuario predeterminado será `chris`.
+1. **Docker**: Asegúrese de que Docker esté instalado y ejecutándose en su sistema.
+2. **Docker Compose**: Requerido para orquestar los servicios.
+3. **Variables de Entorno**: Utilice el archivo `.env_example` para configurar credenciales sensibles.
 
----
+### Configuración del Entorno
 
-Este repositorio contiene una imagen GIS Engine altamente especializada y preparada para procesamiento geoespacial avanzado, big data distribuido y flujos ETL de análisis espacial.
-El entorno fue diseñado para trabajar junto a una base de datos PostGIS oficial, utilizando un `docker-compose.yml` ubicado en:
+1. **Copiar el archivo `.env_example`**:
+   ```bash
+   cp .env_example .env
+   ```
+2. **Editar el archivo `.env`**:
+   Reemplace los valores de las variables con sus propias credenciales.
 
-```bash
-# Estructura del proyecto
-.
-├── docker-compose.yml
-├── postgis/
-└── gis-engine/
-```
+3. **Iniciar los Servicios**:
+   ```bash
+   docker compose up -d
+   ```
 
-🚀 **Descripción General**
+### Servicios
 
-La imagen `gis-engine` está basada en **Ubuntu 24.04** e integra:
+| Servicio     | Puerto             | Descripción                                | Variables de Entorno                               |
+|-------------|--------------------|--------------------------------------------|-----------------------------------------------------|
+| `postgis`   | `${POSTGRES_PORT}` | Base de datos PostGIS lista para GIS y ETL | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `gis-engine`| —                  | Entorno Spark + Sedona + GDAL + Python     | —                                                   |
 
-✔️ **Python 3.12 + Entorno .venv**
+## Configuración de Docker Compose
 
-Incluye librerías científicas y geoespaciales:
+El archivo `docker-compose.yml` orquesta los servicios necesarios para ejecutar GIS Engine. Puede usarlo tanto para construir la imagen localmente como para utilizar la imagen publicada en GitHub Container Registry (GHCR).
 
-```bash
-numpy, pandas, geopandas, shapely, fiona,
-pyproj, rtree, rasterio,
-matplotlib, seaborn, plotly,
-scipy, scikit-learn,
-sqlalchemy, psycopg2-binary,
-apache-sedona[spark], pyspark,
-sshtunnel, paramiko.
-```
+### Crear el archivo `docker-compose.yml`
 
-✔️ **Big Data Frameworks**
-
-- **Apache Spark 4.0.1** (instalado manualmente con validación SHA512).
-- **Apache Sedona 1.8.0** (para análisis espacial distribuido).
-
-✔️ **GIS Stack nativo**
-
-```bash
-GDAL
-PROJ
-GEOS
-SpatialIndex
-```
-
-✔️ **Soporte opcional para R (CRAN)**
-
-Con paquetes espaciales principales cuando `INSTALL_CRAN=1`.
-
-✔️ **Usuario no-root preconfigurado**
-
-```bash
-Usuario: chris
-Modo seguro: sudo sin contraseña
-Todo se instala bajo /home/chris
-Entorno Python aislado en /home/chris/.venv
-```
-
-🐳 **Uso con Docker Compose (Recomendado)**
-
-Tu `docker-compose.yml`, ubicado en `docker_data/`, orquesta dos servicios:
+Copie el siguiente contenido en un archivo llamado `docker-compose.yml`:
 
 ```yaml
 services:
   postgis:
     image: postgis/postgis:16-3.4
     container_name: postgis
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -101,13 +80,8 @@ services:
       - backend_net
 
   gis-engine:
-    build:
-      context: ./gis-engine
-      dockerfile: Dockerfile
-    image: gis-engine:latest
+    image: ghcr.io/chachr81/gis-engine:latest
     container_name: gis-engine
-    volumes:
-      - ./gis-engine:/opt/gis
     networks:
       - backend_net
 
@@ -115,270 +89,64 @@ networks:
   backend_net:
 ```
 
-▶️ **Levantar todo el stack**
+### Configurar las Variables de Entorno
 
-Desde `docker_data/`:
+1. Cree un archivo `.env` basado en el ejemplo proporcionado (`.env_example`).
+2. Configure las siguientes variables en el archivo `.env`:
+   ```env
+   POSTGRES_USER=su_usuario
+   POSTGRES_PASSWORD=su_contraseña
+   POSTGRES_DB=su_base_de_datos
+   POSTGRES_PORT=5432
+   ```
 
+### Iniciar los Servicios
+
+Ejecute el siguiente comando para iniciar los servicios:
 ```bash
 docker compose up -d
 ```
 
-**Servicios creados:**
+---
 
-| Servicio   | Puerto            | Descripción                                |
-|------------|-------------------|--------------------------------------------|
-| postgis    | ${POSTGRES_PORT}  | Base de datos PostGIS lista para GIS y ETL |
-| gis-engine | —                 | Entorno Spark + Sedona + GDAL + Python     |
+## Cómo Colaborar con el Proyecto
 
-💡 **Nota:** Puedes personalizar las variables de entorno en el archivo `.env` para ajustar los puertos y credenciales según tus necesidades.
+¡Gracias por tu interés en colaborar con GIS Engine! Aquí tienes algunas formas de contribuir:
 
-📦 **Build manual de la imagen (opcional)**
+1. **Reportar Problemas**:
+   - Si encuentras errores o tienes sugerencias, abre un [issue](https://github.com/chachr81/gis-engine/issues).
 
-Si necesitas reconstruir `gis-engine`:
+2. **Proponer Mejoras**:
+   - Realiza un fork del repositorio, crea una nueva rama para tus cambios y envía un pull request.
 
-```bash
-docker build --no-cache -t gis-engine ./gis-engine
-```
+3. **Documentación**:
+   - Ayuda a mejorar la documentación, corrigiendo errores o añadiendo ejemplos útiles.
 
-🐳 **Publicar tu imagen en GitHub Container Registry (GHCR)**
+4. **Pruebas**:
+   - Ejecuta pruebas en diferentes entornos y comparte tus resultados.
 
-1. **Login**
+5. **Difundir el Proyecto**:
+   - Comparte este repositorio con otros interesados en procesamiento geoespacial y big data.
 
-```bash
-echo "<TOKEN>" | docker login ghcr.io -u chachr81 --password-stdin
-```
+### Pasos para Contribuir
 
-2. **Tag**
-
-```bash
-docker tag gis-engine:latest ghcr.io/chachr81/gis-engine:latest
-```
-
-3. **Push**
-
-```bash
-docker push ghcr.io/chachr81/gis-engine:latest
-```
-
-💡 **Uso dentro del contenedor**
-
-Conectarse:
-
-```bash
-docker exec -it gis-engine bash
-```
-
-Activar entorno:
-
-```bash
-source ~/.venv/bin/activate
-```
-
-Verificar Spark:
-
-```bash
-spark-submit --version
-```
-
-Verificar Sedona:
-
-```bash
-python3 - << 'EOF'
-from sedona.spark import SedonaContext
-from pyspark.sql import SparkSession
-
-spark = (SparkSession.builder
-         .master("local[*]")
-         .appName("test")
-         .getOrCreate())
-
-sedona = SedonaContext.create(spark)
-print("Sedona OK")
-spark.stop()
-EOF
-```
-
-📁 **Estructura del entorno en el contenedor**
-
-```bash
-/opt/spark             → Apache Spark
-/opt/spark/conf        → Configuración y log4j
-/home/chris/.venv      → Entorno Python
-/opt/gis               → Código montado desde host
-```
-
-🛠️ **Variables de ambiente esenciales**
-
-| Variable     | Valor                              |
-|--------------|------------------------------------|
-| SPARK_HOME   | /opt/spark                         |
-| SEDONA_HOME  | /opt/sedona                        |
-| JAVA_HOME    | /usr/lib/jvm/java-17-openjdk-amd64 |
-| GDAL_DATA    | /usr/share/gdal                    |
-| PROJ_LIB     | /usr/share/proj                    |
-| VIRTUAL_ENV  | /home/chris/.venv                  |
-
-🔒 **Seguridad**
-
-- Usuario no-root por defecto
-- Sudo restringido usando `/etc/sudoers.d/chris`
-- Contenedor orientado a desarrollo seguro, no producción
-
-📘 **Licencia**
-
-MIT License.
-
-## 🧪 Pruebas Adicionales
-
-Para garantizar que los servicios `gis-engine` y `postgis` están funcionando correctamente, puedes realizar las siguientes pruebas:
-
-### 1. Verificar conectividad entre `gis-engine` y `postgis`
-
-Conéctate al contenedor `gis-engine`:
-
-```bash
-docker exec -it gis-engine bash
-```
-
-Dentro del contenedor, instala `psql` si no está disponible:
-
-```bash
-sudo apt-get update && sudo apt-get install -y postgresql-client
-```
-
-Prueba la conexión a la base de datos `postgis`:
-
-```bash
-psql -h postgis -U postgres -d postgres
-```
-
-Si la conexión es exitosa, deberías ver el prompt de `psql`. Usa el siguiente comando para listar las tablas:
-
-```sql
-\dt
-```
-
-### 2. Ejecutar una consulta espacial básica
-
-Dentro de `psql`, ejecuta la siguiente consulta para verificar que las extensiones espaciales están activas:
-
-```sql
-SELECT PostGIS_Version();
-```
-
-Deberías obtener la versión de PostGIS instalada.
-
-### 3. Probar un script de Sedona
-
-Desde el contenedor `gis-engine`, crea un archivo `test_sedona.py` con el siguiente contenido:
-
-```python
-from sedona.spark import SedonaContext
-from pyspark.sql import SparkSession
-
-spark = (SparkSession.builder
-         .master("local[*]")
-         .appName("SedonaTest")
-         .getOrCreate())
-
-sedona = SedonaContext.create(spark)
-
-print("Sedona está funcionando correctamente.")
-
-spark.stop()
-```
-
-Ejecuta el script:
-
-```bash
-python3 test_sedona.py
-```
-
-Si todo está configurado correctamente, deberías ver el mensaje `Sedona está funcionando correctamente.` en la salida.
-
-## 📜 Normas para Docker Compose
-
-Para trabajar con `docker-compose` de manera eficiente, sigue estas normas:
-
-1. **Mantén las credenciales fuera del archivo `docker-compose.yml`**:
-   - Usa un archivo `.env` para almacenar variables sensibles como usuario, contraseña y puertos.
-   - Ejemplo de un archivo `.env`:
-
-     ```env
-     POSTGRES_USER=postgres
-     POSTGRES_PASSWORD=CAMBIAR_ME
-     POSTGRES_DB=postgres
-     POSTGRES_PORT=55432
-     ```
-
-2. **Evita usar imágenes sin tag específico**:
-   - Siempre especifica una versión o tag para las imágenes en lugar de usar `latest`.
-   - Ejemplo:
-
-     ```yaml
-     image: postgis/postgis:16-3.4
-     ```
-
-3. **Define redes personalizadas**:
-   - Usa redes dedicadas para aislar los servicios y evitar conflictos.
-   - Ejemplo:
-
-     ```yaml
-     networks:
-       backend_net:
-     ```
-
-4. **Configura reinicios automáticos**:
-   - Usa `restart: unless-stopped` para garantizar que los servicios se reinicien automáticamente en caso de fallo.
-
-5. **Mapea volúmenes para persistencia de datos**:
-   - Asegúrate de mapear volúmenes para bases de datos y otros datos importantes.
-   - Ejemplo:
-
-     ```yaml
-     volumes:
-       - ./postgis:/var/lib/postgresql/data
-     ```
-
-6. **Verifica los puertos expuestos**:
-   - Asegúrate de que los puertos expuestos no entren en conflicto con otros servicios en tu máquina.
-   - Ejemplo:
-
-     ```yaml
-     ports:
-       - "55432:5432"
-     ```
-
-7. **Usa `docker-compose.override.yml` para configuraciones locales**:
-   - Crea un archivo `docker-compose.override.yml` para configuraciones específicas de desarrollo.
-
-8. **Documenta tus servicios**:
-   - Incluye comentarios en el archivo `docker-compose.yml` para explicar cada servicio y configuración.
-
-Estas normas te ayudarán a mantener un entorno limpio, seguro y fácil de gestionar.
-
-## 🌐 Uso del archivo `.env_example`
-
-Para configurar las credenciales y variables de entorno necesarias para `docker-compose`, utiliza el archivo `.env_example` incluido en este repositorio. Sigue estos pasos:
-
-1. **Copia el archivo `.env_example` a `.env`**:
-
+1. **Clonar el Repositorio**:
    ```bash
-   cp .env_example .env
+   git clone https://github.com/chachr81/gis-engine.git
    ```
 
-2. **Edita el archivo `.env`**:
-   - Abre el archivo `.env` en tu editor de texto favorito.
-   - Reemplaza los valores de las variables según sea necesario. Por ejemplo:
+2. **Crear una Nueva Rama**:
+   ```bash
+   git checkout -b feature/nombre-de-tu-cambio
+   ```
 
-     ```env
-     POSTGRES_USER=postgres
-     POSTGRES_PASSWORD=mi_contraseña_segura
-     POSTGRES_DB=mi_base_de_datos
-     POSTGRES_PORT=55432
-     ```
+3. **Realizar Cambios y Confirmarlos**:
+   ```bash
+   git add .
+   git commit -m "Descripción de tu cambio"
+   ```
 
-3. **Verifica que el archivo `.env` esté siendo utilizado**:
-   - Asegúrate de que el archivo `docker-compose.yml` incluya la línea `env_file: - .env` en la configuración de los servicios.
+4. **Enviar un Pull Request**:
+   - Sube tus cambios a tu fork y abre un pull request hacia el repositorio principal.
 
-Este archivo `.env` asegura que las credenciales sensibles no se incluyan directamente en el archivo `docker-compose.yml`, siguiendo las mejores prácticas de seguridad.
+---
