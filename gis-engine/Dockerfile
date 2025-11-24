@@ -33,19 +33,19 @@ RUN apt-get update && apt-get install -y sudo && \
     usermod -aG sudo ${USERNAME}
 
 # ---------------------------------------------------------
-# HABILITAR SUDO SIN CONTRASEÑA PARA CHRIS (OBLIGATORIO EN DOCKER BUILD)
+# HABILITAR SUDO SIN CONTRASEÑA PARA CHRIS
 # ---------------------------------------------------------
 RUN echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
     chmod 440 /etc/sudoers.d/${USERNAME}
 
 # ---------------------------------------------------------
-# TODO A PARTIR DE AQUÍ SE INSTALA CON EL USUARIO CHRIS
+# TODO A PARTIR DE AQUÍ COMO USUARIO CHRIS
 # ---------------------------------------------------------
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
 # ---------------------------------------------------------
-# Agregar repositorios deadsnakes (Python) y ubuntugis (GDAL)
+# Repositorios Python (deadsnakes) y GDAL (ubuntugis)
 # ---------------------------------------------------------
 RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends software-properties-common && \
     sudo add-apt-repository ppa:deadsnakes/ppa -y && \
@@ -53,7 +53,7 @@ RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends softw
     sudo apt-get update
 
 # ---------------------------------------------------------
-# Consolidar instalación de dependencias del sistema
+# Consolidar dependencias
 # ---------------------------------------------------------
 RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends \
     ca-certificates curl wget gnupg git sudo \
@@ -62,20 +62,22 @@ RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends \
     gdal-bin libgdal-dev libspatialindex-dev proj-bin libproj-dev libgeos-dev \
     libxml2-dev libssl-dev libcurl4-openssl-dev openjdk-17-jdk-headless \
     postgresql-client \
-    rsync nano bash-completion && \
+    rsync nano bash-completion \
+    libxext6 libxrender1 libxtst6 \
+    && \
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
     sudo rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
-# Instalar R + CRAN + dependencias espaciales (opcional)
+# Instalar R + CRAN (opcional)
 # ---------------------------------------------------------
 RUN if [ "$INSTALL_CRAN" = "1" ]; then \
     sudo apt-get update && sudo apt-get install -y --no-install-recommends \
-    dirmngr gnupg apt-transport-https software-properties-common && \
+      dirmngr gnupg apt-transport-https software-properties-common && \
     wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc \
-    | sudo gpg --dearmor -o /usr/share/keyrings/cran-keyring.gpg && \
+      | sudo gpg --dearmor -o /usr/share/keyrings/cran-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cran-keyring.gpg] https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/" \
-    | sudo tee /etc/apt/sources.list.d/cran-r.list && \
+      | sudo tee /etc/apt/sources.list.d/cran-r.list && \
     sudo apt-get update && \
     sudo apt-get install -y --no-install-recommends \
       r-base r-base-dev \
@@ -86,7 +88,7 @@ RUN if [ "$INSTALL_CRAN" = "1" ]; then \
 fi
 
 # ---------------------------------------------------------
-# Corregir URL y hash de Spark con validación
+# SPARK 4.0.1
 # ---------------------------------------------------------
 ENV SPARK_URL=https://archive.apache.org/dist/spark/spark-4.0.1/spark-4.0.1-bin-hadoop3.tgz
 ENV SPARK_HASH=9198602c6b931b46686f32a25793b3bb58b522cd98a5b6a94d2484bae32e3e7b520d60f4bffe72ba29ff5c9ecd862443841ee47dde0f2f9e1bf52539f7baef41
@@ -100,15 +102,17 @@ RUN sudo mkdir -p /opt/spark /opt/spark/conf && \
     sudo chown -R ${USERNAME}:${USERNAME} /opt/spark
 
 # ---------------------------------------------------------
-# Configurar log4j.properties
+# log4j
+# ---------------------------------------------------------
 RUN echo "log4j.rootCategory=WARN, console" | sudo tee /opt/spark/conf/log4j.properties && \
  echo "log4j.appender.console=org.apache.log4j.ConsoleAppender" | sudo tee -a /opt/spark/conf/log4j.properties && \
  echo "log4j.appender.console.target=System.err" | sudo tee -a /opt/spark/conf/log4j.properties && \
  echo "log4j.appender.console.layout=org.apache.log4j.PatternLayout" | sudo tee -a /opt/spark/conf/log4j.properties && \
  echo "log4j.appender.console.layout.ConversionPattern=%d{yy/MM/dd HH:mm:ss} %p %c{1}: %m%n" | sudo tee -a /opt/spark/conf/log4j.properties
 
+
 # ---------------------------------------------------------
-# Instalar Python GIS + Spark + Sedona en el entorno virtual (.venv)
+# Python venv con Spark + Sedona + GIS
 # ---------------------------------------------------------
 ENV VIRTUAL_ENV=/home/${USERNAME}/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -125,10 +129,10 @@ RUN python3 -m venv /home/${USERNAME}/.venv && \
       earthengine-api && \
     /home/${USERNAME}/.venv/bin/python -c "from sedona.spark import *; import geopandas, shapely, pyspark; print('Paquetes Python instalados en .venv')"
 
+
 # ---------------------------------------------------------
-# VALIDACIÓN DE SPARK Y SEDONA (SE CONSERVA IGUAL)
+# VALIDACIÓN DE SPARK + SEDONA (modificación importante: GEOTOOLS 28.2)
 # ---------------------------------------------------------
-## Actualización: Usar configuración explícita de SparkSession y SedonaContext
 RUN echo "from sedona.spark import SedonaContext" | sudo tee /opt/validate_spark_sedona.py > /dev/null && \
     echo "from pyspark.sql import SparkSession" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
@@ -136,7 +140,7 @@ RUN echo "from sedona.spark import SedonaContext" | sudo tee /opt/validate_spark
     echo "    SparkSession.builder" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "    .appName(\"SparkSedonaSession\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "    .master(\"local[*]\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .config(\"spark.jars.packages\", \"org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-33.1\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
+    echo "    .config(\"spark.jars.packages\", \"org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-28.2\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "    .config(\"spark.jars.repositories\", \"https://artifacts.unidata.ucar.edu/repository/unidata-all\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "    .config(\"spark.serializer\", \"org.apache.spark.serializer.KryoSerializer\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
     echo "    .config(\"spark.sql.extensions\", \"org.apache.sedona.sql.SedonaSqlExtensions\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
@@ -168,14 +172,14 @@ RUN echo "Validando Apache Spark y Sedona..." && \
     python3 /opt/validate_spark_sedona.py
 
 # ---------------------------------------------------------
-# Validar claves GPG para R (si se instala)
+# Claves GPG R (si aplica)
 # ---------------------------------------------------------
 RUN if [ "$INSTALL_CRAN" = "1" ]; then \
     wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | gpg --list-keys || { echo "Error: clave GPG no válida"; exit 1; }; \
 fi
 
 # ---------------------------------------------------------
-# Script de entorno (SE CONSERVA IGUAL)
+# Script de entorno
 # ---------------------------------------------------------
 RUN echo "export LANG=C.UTF-8" | sudo tee /etc/profile.d/gis.sh && \
     echo "export GDAL_DATA=/usr/share/gdal" | sudo tee -a /etc/profile.d/gis.sh && \
@@ -185,9 +189,9 @@ RUN echo "export LANG=C.UTF-8" | sudo tee /etc/profile.d/gis.sh && \
     sudo chmod 644 /etc/profile.d/gis.sh
 
 # ---------------------------------------------------------
-# CMD por defecto
+# CMD
 # ---------------------------------------------------------
 CMD ["tail", "-f", "/dev/null"]
 
-# Limpieza (SE CONSERVA)
+# Limpieza
 RUN rm -rf /tmp/pip-cache /tmp/* || true

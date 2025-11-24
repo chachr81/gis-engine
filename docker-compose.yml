@@ -18,7 +18,10 @@ services:
       - backend_net
 
   gis-engine:
-    image: ghcr.io/chachr81/gis-engine:latest
+    build:
+      context: ./gis-engine
+      dockerfile: Dockerfile
+    image: gis-engine:latest
     container_name: gis-engine
     restart: unless-stopped
     networks:
@@ -26,3 +29,4 @@ services:
 
 networks:
   backend_net:
+    driver: bridge

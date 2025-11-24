@@ -26,3 +26,7 @@ postgis/
 
 # Caché de Docker
 **/.dockerignore
+Dockerfile1
+
+# Archivos de configuración de GitHub
+.github/
