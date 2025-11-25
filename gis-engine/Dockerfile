@@ -110,9 +110,8 @@ RUN echo "log4j.rootCategory=WARN, console" | sudo tee /opt/spark/conf/log4j.pro
  echo "log4j.appender.console.layout=org.apache.log4j.PatternLayout" | sudo tee -a /opt/spark/conf/log4j.properties && \
  echo "log4j.appender.console.layout.ConversionPattern=%d{yy/MM/dd HH:mm:ss} %p %c{1}: %m%n" | sudo tee -a /opt/spark/conf/log4j.properties
 
-
 # ---------------------------------------------------------
-# Python venv con Spark + Sedona + GIS
+# Python venv con Spark + Sedona + GIS + Jupyter
 # ---------------------------------------------------------
 ENV VIRTUAL_ENV=/home/${USERNAME}/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -124,52 +123,38 @@ RUN python3 -m venv /home/${USERNAME}/.venv && \
       sqlalchemy psycopg2-binary \
       geopandas fiona shapely pyproj rtree \
       rasterio matplotlib seaborn plotly \
+      notebook ipywidgets \
       pyspark apache-sedona[spark] \
       sshtunnel paramiko \
       earthengine-api && \
     /home/${USERNAME}/.venv/bin/python -c "from sedona.spark import *; import geopandas, shapely, pyspark; print('Paquetes Python instalados en .venv')"
 
+# Usar SIEMPRE Python del venv para PySpark
+ENV PYSPARK_PYTHON=/home/${USERNAME}/.venv/bin/python
+ENV PYSPARK_DRIVER_PYTHON=/home/${USERNAME}/.venv/bin/python
 
 # ---------------------------------------------------------
-# VALIDACIÓN DE SPARK + SEDONA (modificación importante: GEOTOOLS 28.2)
+# PYSPARK_SUBMIT_ARGS global — Sedona + Geotools coherentes
 # ---------------------------------------------------------
-RUN echo "from sedona.spark import SedonaContext" | sudo tee /opt/validate_spark_sedona.py > /dev/null && \
-    echo "from pyspark.sql import SparkSession" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "spark = (" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    SparkSession.builder" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .appName(\"SparkSedonaSession\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .master(\"local[*]\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .config(\"spark.jars.packages\", \"org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-28.2\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .config(\"spark.jars.repositories\", \"https://artifacts.unidata.ucar.edu/repository/unidata-all\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .config(\"spark.serializer\", \"org.apache.spark.serializer.KryoSerializer\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .config(\"spark.sql.extensions\", \"org.apache.sedona.sql.SedonaSqlExtensions\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "    .getOrCreate()" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo ")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"Spark iniciado en:\", spark.sparkContext.master)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"Versión de Spark:\", spark.version)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "sedona = SedonaContext.create(spark)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "ext_val = spark.conf.get(\"spark.sql.extensions\", \"\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "fn_ok  = spark.catalog.functionExists(\"st_point\") or spark.catalog.functionExists(\"ST_Point\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "py_ok  = True" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"Sedona package en Spark :\", \"True\")" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"spark.sql.extensions     :\", ext_val)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"Funciones Python (S.*)   :\", py_ok)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"Funciones registradas    :\", fn_ok)" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "print(\"SEDONA_ACTIVO            :\", py_ok and fn_ok and (\"sedona\" in ext_val.lower() or \"SedonaSqlExtensions\" in ext_val))" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null && \
-    echo "spark.stop()" | sudo tee -a /opt/validate_spark_sedona.py > /dev/null
+ENV PYSPARK_SUBMIT_ARGS="--packages org.apache.sedona:sedona-spark-4.0_2.13:${SEDONA_VERSION},org.datasyslab:geotools-wrapper:${SEDONA_VERSION}-33.1 pyspark-shell"
 
-RUN echo "Validando Apache Spark y Sedona..." && \
-    if [ -x "$SPARK_HOME/bin/spark-submit" ]; then \
-        $SPARK_HOME/bin/spark-submit --version; \
-    else \
-        echo "Error: spark-submit no encontrado en $SPARK_HOME/bin/"; exit 1; \
-    fi && \
-    python3 /opt/validate_spark_sedona.py
+# ---------------------------------------------------------
+# WRAPPER pyspark-real (CLI usando .venv + Sedona)
+# ---------------------------------------------------------
+RUN echo '#!/bin/bash' | sudo tee /usr/local/bin/pyspark-real > /dev/null && \
+    echo 'export PYSPARK_PYTHON="'$VIRTUAL_ENV'/bin/python"' | sudo tee -a /usr/local/bin/pyspark-real > /dev/null && \
+    echo 'export PYSPARK_DRIVER_PYTHON="'$VIRTUAL_ENV'/bin/python"' | sudo tee -a /usr/local/bin/pyspark-real > /dev/null && \
+    echo 'export PYSPARK_SUBMIT_ARGS="--packages org.apache.sedona:sedona-spark-4.0_2.13:'${SEDONA_VERSION}',org.datasyslab:geotools-wrapper:'${SEDONA_VERSION}'-33.1 pyspark-shell"' | sudo tee -a /usr/local/bin/pyspark-real > /dev/null && \
+    echo 'exec /opt/spark/bin/pyspark "$@"' | sudo tee -a /usr/local/bin/pyspark-real > /dev/null && \
+    sudo chmod +x /usr/local/bin/pyspark-real && \
+    echo "alias pyspark='/usr/local/bin/pyspark-real'" >> /home/${USERNAME}/.bashrc
+
+# ---------------------------------------------------------
+# Kernel Jupyter preconfigurado con PYSPARK_SUBMIT_ARGS
+# ---------------------------------------------------------
+RUN /home/${USERNAME}/.venv/bin/python -m ipykernel install --user --name gis-engine --display-name "Python 3 (GIS-Engine)" && \
+    KDIR=$(/home/${USERNAME}/.venv/bin/jupyter --data-dir)/kernels/gis-engine && \
+    sed -i 's|"argv": \[|"env": {"PYSPARK_SUBMIT_ARGS": "--packages org.apache.sedona:sedona-spark-4.0_2.13:'${SEDONA_VERSION}',org.datasyslab:geotools-wrapper:'${SEDONA_VERSION}'-33.1 pyspark-shell"},\n  "argv": \[|g' "$KDIR/kernel.json"
 
 # ---------------------------------------------------------
 # Claves GPG R (si aplica)
@@ -186,9 +171,69 @@ RUN echo "export LANG=C.UTF-8" | sudo tee /etc/profile.d/gis.sh && \
     echo "export PROJ_LIB=/usr/share/proj" | sudo tee -a /etc/profile.d/gis.sh && \
     echo "export SPARK_HOME=/opt/spark" | sudo tee -a /etc/profile.d/gis.sh && \
     echo "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" | sudo tee -a /etc/profile.d/gis.sh && \
+    echo "export VIRTUAL_ENV=/home/${USERNAME}/.venv" | sudo tee -a /etc/profile.d/gis.sh && \
+    echo "export PATH=/home/${USERNAME}/.venv/bin:\$PATH" | sudo tee -a /etc/profile.d/gis.sh && \
+    echo "export PYSPARK_PYTHON=/home/${USERNAME}/.venv/bin/python" | sudo tee -a /etc/profile.d/gis.sh && \
+    echo "export PYSPARK_DRIVER_PYTHON=/home/${USERNAME}/.venv/bin/python" | sudo tee -a /etc/profile.d/gis.sh && \
+    echo "export PYSPARK_SUBMIT_ARGS='--packages org.apache.sedona:sedona-spark-4.0_2.13:${SEDONA_VERSION},org.datasyslab:geotools-wrapper:${SEDONA_VERSION}-33.1 pyspark-shell'" | sudo tee -a /etc/profile.d/gis.sh && \
     sudo chmod 644 /etc/profile.d/gis.sh
 
 # ---------------------------------------------------------
+# Script de validación de Spark + Sedona
+# ---------------------------------------------------------
+RUN sudo tee /opt/validate_sedona.py > /dev/null << 'EOF'
+from pyspark.sql import SparkSession
+from sedona.spark import SedonaContext
+
+# Sesión idéntica a tu script standalone
+spark = (
+    SparkSession.builder
+    .appName("Sedona_Check")
+    .master("local[*]")
+    .config(
+        "spark.jars.packages",
+        "org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,"
+        "org.datasyslab:geotools-wrapper:1.8.0-33.1"
+    )
+    .config("spark.jars.repositories", "https://artifacts.unidata.ucar.edu/repository/unidata-all")
+    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .config("spark.kryo.registrator", "org.apache.sedona.core.serde.SedonaKryoRegistrator")
+    .getOrCreate()
+)
+
+sedona = SedonaContext.create(spark)
+
+print("Spark version:", spark.version)
+print("ST_Point disponible:", spark.catalog.functionExists("ST_Point"))
+
+raster_funcs = [
+    "RS_FromGeoTiff",
+    "RS_GDALRead",
+    "RS_Tile",
+    "RS_Resample",
+    "RS_Add",
+    "RS_Subtract",
+    "RS_Multiply",
+    "RS_Divide",
+    "RS_Normalize",
+    "RS_ConvertToFloat",
+    "RS_ConvertToInt",
+    "RS_ConvertToDouble",
+    "RS_SetValue",
+    "RS_ToGeoTiff"
+]
+
+print("\nValidación de funciones Raster en Sedona 1.8.0:\n")
+for f in raster_funcs:
+    print(f"{f:20}: {spark.catalog.functionExists(f)}")
+
+spark.stop()
+EOF
+
+RUN echo "Ejecutando validación Sedona..." && \
+    /home/${USERNAME}/.venv/bin/python /opt/validate_sedona.py
+
+    # ---------------------------------------------------------
 # CMD
 # ---------------------------------------------------------
 CMD ["tail", "-f", "/dev/null"]

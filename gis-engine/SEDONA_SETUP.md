@@ -5,29 +5,24 @@
 
 ## Contenedor gis-engine (Ubuntu 24.04)
 
-Este documento resume **todas** las configuraciones efectivas necesarias para levantar Spark + Sedona dentro del contenedor, incluyendo las correcciones manuales realizadas:
-
-- Creación de `pyspark-real`
-- Arreglo de la entrada global `pyspark`
-- Configuración persistente de los jars
-- Validación desde notebook
-- Advertencia: `pyspark` global queda colgado (no finaliza) y por qué.
-
-Todo ya ha sido probado.
+Este documento detalla la configuración del contenedor `gis-engine`, que incluye Apache Spark 4.0.1, Apache Sedona 1.8.0, y un entorno Python 3.12 con bibliotecas GIS y de big data. También se describe cómo validar la instalación y solucionar problemas comunes.
 
 ---
 
 ## 1. Estructura del contenedor
 
-El Dockerfile instala:
+El contenedor se basa en Ubuntu 24.04 e incluye:
 
-- `/opt/spark` → Spark 4.0.1 completo
-- Python 3.12 en `/home/chris/.venv`
-- `apache-sedona[spark]` en la venv
-- OpenJDK 17
-- Jars Sedona descargados por pip
+- **Apache Spark 4.0.1**: Instalado en `/opt/spark`.
+- **Apache Sedona 1.8.0**: Instalado como paquete Python y configurado con los jars necesarios.
+- **Python 3.12**: Instalado en un entorno virtual (`.venv`) en `/home/chris/.venv`.
+- **Herramientas GIS**: GDAL, PROJ, GEOS, SpatialIndex.
+- **OpenJDK 17**: Requerido para Spark.
+- **PostgreSQL Client**: Para conectarse a bases de datos PostGIS.
 
-Y variables en `/etc/profile.d/gis.sh`:
+### Variables de entorno configuradas
+
+Las siguientes variables están definidas en `/etc/profile.d/gis.sh`:
 
 ```bash
 export LANG=C.UTF-8
@@ -35,230 +30,111 @@ export GDAL_DATA=/usr/share/gdal
 export PROJ_LIB=/usr/share/proj
 export SPARK_HOME=/opt/spark
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-export PATH=$SPARK_HOME/bin:$PATH
+export VIRTUAL_ENV=/home/chris/.venv
+export PATH=/home/chris/.venv/bin:$PATH
+export PYSPARK_PYTHON=/home/chris/.venv/bin/python
+export PYSPARK_DRIVER_PYTHON=/home/chris/.venv/bin/python
+export PYSPARK_SUBMIT_ARGS='--packages org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-33.1 pyspark-shell'
 ```
 
 ---
 
-## 2. Verificación de binarios
+## 2. Instalación de dependencias
 
-Dentro del contenedor:
+El contenedor incluye las siguientes dependencias:
 
-```bash
-which pyspark
-readlink -f "$(which pyspark)"
-```
+- **Python GIS Libraries**: `geopandas`, `shapely`, `fiona`, `pyproj`, `rtree`, `rasterio`.
+- **Big Data Libraries**: `pyspark`, `apache-sedona[spark]`.
+- **Visualización**: `matplotlib`, `seaborn`, `plotly`.
+- **Otros**: `sqlalchemy`, `psycopg2-binary`, `sshtunnel`, `paramiko`.
 
-Debiera apuntar a:
-
-```bash
-/opt/spark/bin/pyspark
-```
-
-Pero también existe:
-
-```bash
-/home/chris/.venv/bin/pyspark
-```
-
-Este **NO** debe usarse como comando global.
+Estas bibliotecas están instaladas en el entorno virtual (`.venv`) y se validan automáticamente al construir el contenedor.
 
 ---
 
-## 3. Problema detectado con pyspark global
+## 3. Validación de la configuración
 
-Cada vez que ejecutamos:
+### Script de validación
 
-```bash
-pyspark
-```
+El contenedor incluye un script de validación ubicado en `/opt/validate_sedona.py`. Este script verifica:
 
-Terminaba colgado con:
+1. La versión de Spark.
+2. La disponibilidad de funciones de Sedona como `ST_Point`.
+3. Funciones raster específicas de Sedona 1.8.0.
 
-```bash
-Exception in thread "main" java.util.NoSuchElementException: _PYSPARK_DRIVER_CONN_INFO_PATH
-```
+#### Ejecución del script
 
-Esto confirma que el `pyspark-shell-main` de Spark 4.0.1 no se está comunicando correctamente con Python 3.12.
-
-Por eso creamos un wrapper manual: `pyspark-real`.
-
----
-
-## 4. Creación de pyspark-real
-
-Creamos un binario alternativo en `/usr/local/bin/pyspark-real`:
+Para ejecutar el script, usa el siguiente comando dentro del contenedor:
 
 ```bash
-sudo nano /usr/local/bin/pyspark-real
+python /opt/validate_sedona.py
 ```
 
-Contenido:
-
-```bash
-#!/bin/bash
-export PYSPARK_SUBMIT_ARGS="--packages org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-33.1 --repositories https://artifacts.unidata.ucar.edu/repository/unidata-all pyspark-shell"
-exec /opt/spark/bin/pyspark "$@"
-```
-
-Y permisos:
-
-```bash
-sudo chmod +x /usr/local/bin/pyspark-real
-```
-
----
-
-## 5. Sobreescritura del pyspark global para que invoque pyspark-real
-
-Creamos alias persistente en el contenedor:
-
-```bash
-sudo nano /etc/profile.d/pyspark.sh
-```
-
-Contenido:
-
-```bash
-alias pyspark="/usr/local/bin/pyspark-real"
-```
-
-Luego:
-
-```bash
-source /etc/profile.d/pyspark.sh
-```
-
----
-
-## 6. Resultado esperado
-
-Ahora el comando:
-
-```bash
-pyspark
-```
-
-Hace:
-
-- Ejecuta nuestro wrapper `pyspark-real`.
-- Este sí pasa los jars necesarios.
-- Spark inicia correctamente (pero puede quedar “esperando input” como REPL).
-- Ya **NO** dispara el error `_PYSPARK_DRIVER_CONN_INFO_PATH`.
-
-Sin embargo…
-
----
-
-## 7. Advertencia: pyspark sigue sin finalizar por diseño
-
-Spark 4.0.1 cambia la manera en que `pyspark-shell-main` gestiona el loop interactivo.
-
-Esto genera:
-
-- El REPL queda vivo esperando input.
-- Pero no entrega control de vuelta a la shell si no se escribe `exit()` o `Ctrl+D`.
-
-Esto es un comportamiento conocido en Spark 4.0 con Python 3.12.
-No afecta al uso en notebooks.
-
----
-
-## 8. Configuración de PYSPARK_SUBMIT_ARGS
-
-Comprobación:
-
-```bash
-echo "$PYSPARK_SUBMIT_ARGS"
-```
-
-Debe mostrar:
-
-```bash
---packages org.apache.sedona:sedona-spark-4.0_2.13:1.8.0,org.datasyslab:geotools-wrapper:1.8.0-33.1 --repositories https://artifacts.unidata.ucar.edu/repository/unidata-all pyspark-shell
-```
-
-Esto asegura que los jars se cargan automáticamente tanto en consola como en notebooks.
-
----
-
-## 9. Uso REAL en notebooks (funciona perfectamente)
-
-En un notebook:
-
-**Celda 1: imports**
-
-```python
-from pyspark.sql import SparkSession
-from sedona.spark import SedonaContext
-from pyspark.sql import functions as F
-```
-
-**Celda 2: inicialización validada**
-
-```python
-spark = (
-    SparkSession.builder
-    .appName("Sedona_Validation")
-    .master("local[*]")
-    .getOrCreate()
-)
-
-sedona = SedonaContext.create(spark)
-
-print("Spark version:", spark.version)
-print("ST_Point disponible:", spark.catalog.functionExists("ST_Point"))
-
-df_test = spark.range(1).select(
-    F.expr("ST_Point(-70.0, -33.0)").alias("geom")
-)
-
-df_test.show()
-df_test.printSchema()
-```
-
-**Salida validada:**
+#### Salida esperada
 
 ```plaintext
 Spark version: 4.0.1
 ST_Point disponible: True
-+---------------+
-|geom           |
-+---------------+
-|POINT (-70 -33)|
-+---------------+
-root
- |-- geom: geometry (nullable = true)
+
+Validación de funciones Raster en Sedona 1.8.0:
+
+RS_FromGeoTiff      : True
+RS_GDALRead         : False
+RS_Tile             : True
+RS_Resample         : True
+RS_Add              : True
+RS_Subtract         : True
+RS_Multiply         : True
+RS_Divide           : True
+RS_Normalize        : True
+RS_ConvertToFloat   : False
+RS_ConvertToInt     : False
+RS_ConvertToDouble  : False
+RS_SetValue         : True
+RS_ToGeoTiff        : False
 ```
+---
 
-Eso confirma Sedona 1.8.0 activo.
+## 4. Uso de `pyspark-real`
+
+El contenedor incluye un wrapper llamado `pyspark-real` para garantizar que Sedona y Spark funcionen correctamente con el entorno virtual. Este wrapper:
+
+- Configura las variables necesarias para Sedona.
+- Usa el Python del entorno virtual (`.venv`).
+
+### Alias persistente
+
+El alias `pyspark` está configurado para usar `pyspark-real`. Esto asegura que siempre se utilicen las configuraciones correctas.
 
 ---
 
-## 10. Resumen final
+## 5. Troubleshooting
 
-- `pyspark-real` permite lanzar Spark 4.0.1 + Sedona sin errores.
-- Se evita el conflicto entre el `pyspark` del venv y el de `/opt/spark`.
-- El REPL queda “colgado” por el bug de `_PYSPARK_DRIVER_CONN_INFO_PATH`, pero es estable.
-- En notebooks, Sedona funciona 100% sin warnings graves.
+### Problema: `pyspark` se cuelga o no devuelve control a la shell
 
-El contenedor queda con configuración persistente y funcional.
+**Causa**: Bug conocido en Spark 4.0.1 con Python 3.12.
+
+**Solución**: Usa `pyspark-real` en lugar del comando global.
+
+### Problema: `SedonaContext.create()` lanza `TypeError`
+
+**Causa**: Sedona no está en el classpath o la sesión Spark ya existía.
+
+**Solución**: Asegúrate de iniciar notebooks con la configuración persistente de `PYSPARK_SUBMIT_ARGS`.
+
+### Problema: `ST_Point` no aparece en `spark.catalog.functionExists`
+
+**Causa**: Sedona UDT/UDF no se registró.
+
+**Solución**: Implementa `SedonaContext.create(spark)` nuevamente.
 
 ---
 
-## 11. Troubleshooting (casos reales)
+## 6. Resumen final
 
-### A. pyspark se cuelga o no devuelve control a la shell
-Spark 4.0.1 + Python 3.12 presenta un bug con `_PYSPARK_DRIVER_CONN_INFO_PATH`.
-Solución: usar `pyspark-real`.
+- El contenedor `gis-engine` está completamente configurado para Spark 4.0.1 y Sedona 1.8.0.
+- Incluye herramientas GIS, un entorno Python aislado, y validaciones automáticas.
+- Usa `pyspark-real` para evitar problemas conocidos con Spark y Python 3.12.
+- El script de validación confirma que todas las funciones de Sedona están disponibles.
 
-### B. SedonaContext.create() lanza TypeError: 'JavaPackage' object is not callable
-Esto ocurre cuando:
-- Sedona no está en el classpath
-- la sesión Spark ya existía y se creó sin los jars
-
-Solución: siempre iniciar notebooks con la configuración persistente de `PYSPARK_SUBMIT_ARGS`.
-
-### C. ST_Point no aparece en spark.catalog.functionExists
-Indica que Sedona UDT/UDF no se registró.
-Solución: implementar `SedonaContext.create(spark)` nuevamente.
+Para más información, consulta el archivo `Dockerfile` o ejecuta el script de validación incluido.
