@@ -1,6 +1,11 @@
-from fastapi import FastAPI
-app = FastAPI()
+from fastapi import FastAPI, HTTPException
+import httpx
 
-@app.get("/")
-def read_root():
-    return {"mensaje": "¡FastAPI espacial funcionando!", "status": "ok"}
+app = FastAPI(
+    title="Portal GIS API",
+    root_path="/api",
+)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

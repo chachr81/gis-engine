@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+httpx
+psycopg2-binary
+sqlalchemy
+alembic
+geoalchemy2
+asyncpg
+python-dotenv
+requests
