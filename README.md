@@ -1,237 +1,171 @@
-# GIS Engine – Entorno Geoespacial Completo (Docker)
+# Plataforma Geoespacial de Microservicios con Docker
 
 ![Docker](https://img.shields.io/badge/Docker-Engine-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Licencia](https://img.shields.io/badge/License-MIT-yellow)
 
-## Descripción General
+## 1. Descripción General
 
-Este repositorio proporciona una imagen Docker altamente especializada para procesamiento geoespacial avanzado, big data distribuido y flujos ETL de análisis espacial. El entorno está diseñado para trabajar junto a una base de datos PostGIS oficial, orquestado mediante el archivo `docker-compose.yml` incluido.
+Este repositorio contiene una plataforma completa para el análisis y visualización de datos geoespaciales, construida sobre una arquitectura de microservicios orquestada con Docker Compose. El proyecto está diseñado para ser modular, robusto y escalable, separando la infraestructura en dos capas principales: una para el procesamiento de datos pesados y otra para la exposición de servicios y aplicaciones web.
 
-### Características
+El corazón del proyecto es el `gis-engine`, un entorno de procesamiento de Big Data con Apache Spark y Apache Sedona, complementado por servicios de base de datos, API y un portal web con GeoDjango.
 
-- **Imagen Base**: Ubuntu 24.04
-- **Python 3.12**: Incluye un entorno virtual con bibliotecas científicas y geoespaciales:
-  ```
-  numpy, pandas, geopandas, shapely, fiona, pyproj, rtree, rasterio,
-  matplotlib, seaborn, plotly, scipy, scikit-learn, sqlalchemy,
-  psycopg2-binary, apache-sedona[spark], pyspark, sshtunnel, paramiko.
-  ```
-- **Frameworks de Big Data**:
-  - Apache Spark 4.0.1 (instalado manualmente con validación SHA512).
-  - Apache Sedona 1.8.0 (para análisis espacial distribuido).
-- **Herramientas GIS**: GDAL, PROJ, GEOS, SpatialIndex.
-- **Soporte Opcional para R**: Incluye paquetes espaciales cuando `INSTALL_CRAN=1`.
-- **Usuario no-root**: Usuario preconfigurado con entorno Python aislado.
+## 2. Arquitectura de Microservicios
 
-## Configuración Inicial
+La plataforma se divide en dos stacks que se comunican a través de una red compartida, permitiendo levantar solo los componentes necesarios para cada tarea.
 
-### Prerrequisitos
+### Capa 1: Datos y Procesamiento (`docker-compose.yml`)
+Este stack constituye el backend de almacenamiento y análisis de Big Data.
 
-1. **Docker**: Asegúrese de que Docker esté instalado y ejecutándose en su sistema.
-2. **Docker Compose**: Requerido para orquestar los servicios.
-3. **Variables de Entorno**: Utilice el archivo `.env_example` para configurar credenciales sensibles.
+| Servicio | Descripción |
+|---|---|
+| `postgis` | Base de datos **PostgreSQL 16** con la extensión **PostGIS 3.4**, optimizada para consultas y almacenamiento de datos espaciales. |
+| `gis-engine` | **Motor de procesamiento principal**. Es un entorno Ubuntu 24.04 con **Apache Spark 4.0.1**, **Apache Sedona 1.8.0**, Python 3.12 y un conjunto completo de librerías GIS (GDAL, Geopandas, Rasterio, etc.) para análisis distribuido. |
 
-### Configuración del Entorno
+### Capa 2: Aplicación y Visualización (`docker-compose.portal.yml`)
+Este stack expone los datos y la lógica de negocio a través de servicios web accesibles desde el navegador.
 
-1. **Copiar el archivo `.env_example`**:
+| Servicio | Descripción |
+|---|---|
+| `django-web` | **Portal Web principal** desarrollado con GeoDjango. Actúa como la interfaz de usuario principal. |
+| `api-fastapi` | **API REST** de alto rendimiento construida con FastAPI, ideal para servir endpoints de datos rápidos y eficientes. |
+| `geoserver` | Servidor de mapas estándar para publicar datos geoespaciales a través de servicios OGC (WMS, WFS). |
+| `edge-proxy` | **Proxy Inverso (Nginx)** que actúa como único punto de entrada a la plataforma. Redirige el tráfico al servicio correspondiente según la URL. |
+
+---
+
+## 3. Guía de Instalación y Configuración
+
+A continuación se detallan los pasos para configurar el entorno en diferentes sistemas operativos.
+
+### 3.1. Para Usuarios de Linux y macOS
+
+**Prerrequisitos:**
+- Docker y Docker Compose instalados.
+- Git instalado.
+
+**Pasos:**
+1. **Clonar el repositorio:**
+   ```bash
+   git clone <URL_DEL_REPOSITORIO>
+   cd docker_data
+   ```
+
+2. **Crear archivos de configuración de Docker:**
+   Copia los archivos de ejemplo para crear tu configuración local.
+   ```bash
+   cp docker-compose_example.yml docker-compose.yml
+   cp docker-compose.portal_example.yml docker-compose.portal.yml
+   ```
+
+3. **Configurar las variables de entorno:**
+   Copia el archivo de ejemplo `.env` y edítalo con tus rutas y credenciales.
    ```bash
    cp .env_example .env
    ```
-2. **Editar el archivo `.env`**:
-   Reemplace los valores de las variables con sus propias credenciales.
+   Abre el archivo `.env` con un editor de texto y **modifica las rutas para que sean absolutas** y apunten a las carpetas correctas en tu sistema.
 
-3. **Iniciar los Servicios**:
-   ```bash
-   docker compose up -d
-   ```
+### 3.2. Para Usuarios de Windows
 
-### Servicios
+El entorno funciona perfectamente en Windows 10/11 con Docker Desktop.
 
-| Servicio     | Puerto             | Descripción                                | Variables de Entorno                               |
-|-------------|--------------------|--------------------------------------------|-----------------------------------------------------|
-| `postgis`   | `${POSTGRES_PORT}` | Base de datos PostGIS lista para GIS y ETL | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
-| `gis-engine`| —                  | Entorno Spark + Sedona + GDAL + Python     | —                                                   |
-
-## Configuración de Docker Compose
-
-El archivo `docker-compose.yml` orquesta los servicios necesarios para ejecutar GIS Engine. Puede usarlo tanto para construir la imagen localmente como para utilizar la imagen publicada en GitHub Container Registry (GHCR).
-
-### Crear el archivo `docker-compose.yml`
-
-Copie el siguiente contenido en un archivo llamado `docker-compose.yml`:
-
-```yaml
-services:
-  postgis:
-    image: postgis/postgis:16-3.4
-    container_name: postgis
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - ./postgis:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    networks:
-      - backend_net
-
-  gis-engine:
-    build:
-      context: ./gis-engine
-    container_name: gis-engine
-    networks:
-      - backend_net
-
-networks:
-  backend_net:
-```
-
-### Configurar las Variables de Entorno
-
-1. Cree un archivo `.env` basado en el ejemplo proporcionado (`.env_example`).
-2. Configure las siguientes variables en el archivo `.env`:
-   ```env
-   POSTGRES_USER=su_usuario
-   POSTGRES_PASSWORD=su_contraseña
-   POSTGRES_DB=su_base_de_datos
-   POSTGRES_PORT=5432
-   ```
-
-### Iniciar los Servicios
-
-Ejecute el siguiente comando para iniciar los servicios:
-```bash
-docker compose up -d
-```
-
----
-
-## Validación de Spark + Sedona
-
-El contenedor incluye un script de validación para comprobar la instalación de Spark y Sedona:
-
-```bash
-python /opt/validate_sedona.py
-```
-
-Este script verifica:
-- La versión de Spark.
-- La disponibilidad de funciones de Sedona como `ST_Point`.
-- Funciones raster específicas de Sedona 1.8.0.
-
----
-
-## Uso en Windows (Soporte Completo)
-
-Este entorno funciona perfectamente en Windows 10/11 con Docker Desktop. Aquí tienes recomendaciones específicas para usuarios de Windows:
-
-### Pasos para usuarios Windows
-
+**Prerrequisitos:**
 1. **Instalar Docker Desktop**:
-   - Descarga e instala Docker Desktop desde [docker.com](https://www.docker.com/products/docker-desktop).
-   - Durante la instalación, habilita WSL2 si es posible.
+   - Descarga e instala Docker Desktop desde [el sitio oficial de Docker](https://www.docker.com/products/docker-desktop).
+   - Durante la instalación, se recomienda **habilitar la integración con WSL2** para un rendimiento óptimo.
 
-2. **¿Qué hacer si WSL2 no está habilitado?**:
-   - Asegúrate de que tu sistema operativo sea compatible con WSL2.
-   - Si no puedes habilitar WSL2, puedes usar el modo de compatibilidad de Docker Desktop con Hyper-V:
-     1. Abre Docker Desktop.
-     2. Ve a **Settings > General**.
-     3. Desactiva la opción "Use the WSL 2 based engine".
-     4. Guarda los cambios y reinicia Docker Desktop.
+2. **Git para Windows**:
+   - Instala Git desde [git-scm.com](https://git-scm.com/download/win).
 
-3. **Clonar este repositorio**:
-   ```bash
-   git clone https://github.com/chachr81/gis-engine.git
+**Pasos:**
+1. **Abrir una terminal**:
+   Puedes usar PowerShell, Windows Terminal o Git Bash.
+
+2. **Clonar el repositorio:**
+   ```powershell
+   git clone <URL_DEL_REPOSITORIO>
+   cd docker_data
    ```
 
-4. **Crear el archivo `.env` desde el ejemplo**:
-   ```bash
-   cp .env_example .env
+3. **Crear archivos de configuración de Docker:**
+   Usa el comando `copy` en la terminal de Windows.
+   ```powershell
+   copy docker-compose_example.yml docker-compose.yml
+   copy docker-compose.portal_example.yml docker-compose.portal.yml
    ```
 
-5. **Ejecutar Docker Compose**:
+4. **Configurar las variables de entorno:**
+   ```powershell
+   copy .env_example .env
+   ```
+   Abre el archivo `.env` con un editor (como VS Code o Notepad++) y **modifica las rutas**. Deben ser absolutas y usar el formato de Windows (ej. `C:\Users\TuUsuario\proyectos\docker_data`).
+
+---
+
+## 4. Cómo Ejecutar el Entorno
+
+El proceso es el mismo para todos los sistemas operativos.
+
+1. **Levantar la Capa de Datos**:
+   Abre una terminal en la raíz del proyecto y ejecuta:
    ```bash
    docker compose up -d
    ```
 
-6. **Entrar al contenedor GIS Engine**:
+2. **Levantar la Capa de Aplicación**:
+   Una vez la capa de datos esté funcionando, levanta los servicios web:
    ```bash
-   docker exec -it gis-engine bash
+   docker compose -f docker-compose.portal.yml up -d
    ```
 
-7. **Activar el entorno Python**:
-   ```bash
-   source ~/.venv/bin/activate
-   ```
-
-8. **Ejecutar Jupyter Notebook**:
-   Ejecuta el siguiente comando para iniciar Jupyter Notebook y abrirlo automáticamente en tu navegador:
-   ```bash
-   jupyter notebook --ip=0.0.0.0 --no-browser --NotebookApp.allow_origin='*' --NotebookApp.open_browser=True
-   ```
+### Detener el Entorno
+Para detener todos los servicios:
+```bash
+docker compose -f docker-compose.portal.yml down
+docker compose down
+```
+> **Nota**: Para borrar también los volúmenes de datos (¡cuidado, esto elimina los datos de PostGIS!), añade la opción `-v`.
 
 ---
 
-## Conexión a PostGIS desde el contenedor
+## 5. Guía de Uso y Desarrollo
 
-El contenedor `gis-engine` incluye el cliente PostgreSQL (`psql`). Puedes conectarte a la base de datos PostGIS con el siguiente comando:
+### Acceso a los Servicios Web
+- **Portal Web (Django)**: [http://localhost/](http://localhost/)
+- **API (FastAPI)**: [http://localhost/api/health](http://localhost/api/health)
+- **GeoServer**: [http://localhost/geoserver/](http://localhost/geoserver/)
+- **PostGIS**: Accesible en el puerto `${POSTGRES_PORT}` desde tu máquina local.
 
+### Interacción con `gis-engine`
+- **Acceder al contenedor**:
+  ```bash
+  docker exec -it gis-engine bash
+  ```
+- **Activar el entorno Python**:
+  ```bash
+  source ~/.venv/bin/activate
+  ```
+- **Ejecutar Jupyter Notebook**:
+  ```bash
+  jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+  ```
+  > Para acceder, necesitarás mapear el puerto `8888` en el `docker-compose.yml`.
+- **Validar Spark y Sedona**:
+  ```bash
+  python /opt/validate_sedona.py
+  ```
+
+### Conexión a PostGIS desde `gis-engine`
 ```bash
 psql -h postgis -U $POSTGRES_USER -d $POSTGRES_DB
 ```
-
-- **Nota**: El password será el configurado en el archivo `.env`.
-
-### Verificar PostGIS
-
-Una vez dentro de `psql`, ejecuta el siguiente comando para verificar la instalación de PostGIS:
-
-```sql
-SELECT PostGIS_Version();
-```
-
 ---
 
-## Cómo Colaborar con el Proyecto
-
-¡Gracias por tu interés en colaborar con GIS Engine! Aquí tienes algunas formas de contribuir:
-
-1. **Reportar Problemas**:
-   - Si encuentras errores o tienes sugerencias, abre un [issue](https://github.com/chachr81/gis-engine/issues).
-
+## 6. Cómo Colaborar
+¡Gracias por tu interés en colaborar!
+1. **Reportar Problemas**: Si encuentras un error o tienes una sugerencia, abre un [issue](https://github.com/chachr81/gis-engine/issues) detallando el problema.
 2. **Proponer Mejoras**:
-   - Realiza un fork del repositorio, crea una nueva rama para tus cambios y envía un pull request.
-
-3. **Documentación**:
-   - Ayuda a mejorar la documentación, corrigiendo errores o añadiendo ejemplos útiles.
-
-4. **Pruebas**:
-   - Ejecuta pruebas en diferentes entornos y comparte tus resultados.
-
-5. **Difundir el Proyecto**:
-   - Comparte este repositorio con otros interesados en procesamiento geoespacial y big data.
-
-### Pasos para Contribuir
-
-1. **Clonar el Repositorio**:
-   ```bash
-   git clone https://github.com/chachr81/gis-engine.git
-   ```
-
-2. **Crear una Nueva Rama**:
-   ```bash
-   git checkout -b feature/nombre-de-tu-cambio
-   ```
-
-3. **Realizar Cambios y Confirmarlos**:
-   ```bash
-   git add .
-   git commit -m "Descripción de tu cambio"
-   ```
-
-4. **Enviar un Pull Request**:
-   - Sube tus cambios a tu fork y abre un pull request hacia el repositorio principal.
+   - Realiza un fork del repositorio.
+   - Crea una nueva rama para tus cambios (`git checkout -b feature/nombre-mejora`).
+   - Realiza tus cambios y haz commit (`git commit -m "feat: descripción del cambio"`).
+   - Envía un Pull Request hacia la rama principal del repositorio original.

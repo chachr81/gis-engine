@@ -24,6 +24,10 @@ gis-engine/.venv/
 # No subir los datos reales de PostGIS
 postgis/
 
+# Docker Compose productivos (usar los .example en su lugar)
+docker-compose.yml
+docker-compose.portal.yml
+
 # Caché de Docker
 **/.dockerignore
 Dockerfile1

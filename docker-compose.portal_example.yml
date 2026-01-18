@@ -1,0 +1,86 @@
+services:
+
+  geoserver:
+    image: kartoza/geoserver:2.28.0--v2025.12.08
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GEOSERVER_ADMIN_USER: ${GEOSERVER_ADMIN_USER:-admin}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD:-geoserver}
+      JAVA_OPTS: "-Xms512m -Xmx2048m -DGEOSERVER_CSRF_DISABLED=true"
+      CORS_ENABLED: "true"
+      CORS_ALLOWED_ORIGINS: "*"
+      CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,HEAD,OPTIONS"
+    volumes:
+      - geoserver_data:/opt/geoserver/data_dir
+    networks:
+      - backend_net
+    expose:
+      - "8080"
+
+  api-fastapi:
+    build:
+      context: ./api-fastapi
+      dockerfile: Dockerfile
+    image: api-fastapi:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgis
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ${FASTAPI_PATH}:/app
+    networks:
+      - backend_net
+    expose:
+      - "8000"
+
+  django-web:
+    build:
+      context: ./django-web
+      dockerfile: Dockerfile
+    image: django-web:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgis
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      DJANGO_ALLOWED_HOSTS: "*"
+      DJANGO_PROJECT_NAME: portafolio_gis
+    volumes:
+      - ${DJANGO_PATH}:/app
+    networks:
+      - backend_net
+    expose:
+      - "8000"
+
+  edge-proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - django-web
+      - api-fastapi
+      - geoserver
+    ports:
+      - "80:80"
+    volumes:
+      - ${NGINX_CONF_PATH}:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend_net
+
+volumes:
+  geoserver_data:
+
+networks:
+  backend_net:
+    external: true
+    name: docker_data_backend_net
