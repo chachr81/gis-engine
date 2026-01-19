@@ -1,0 +1,8 @@
+Django
+djangorestframework
+django-leaflet
+psycopg2-binary
+python-dotenv
+django-environ
+gunicorn
+SQLAlchemy

@@ -21,7 +21,7 @@ services:
 
   api-fastapi:
     build:
-      context: ./api-fastapi
+      context: ${FASTAPI_PATH}
       dockerfile: Dockerfile
     image: api-fastapi:latest
     restart: unless-stopped
@@ -42,7 +42,7 @@ services:
 
   django-web:
     build:
-      context: ./django-web
+      context: ${DJANGO_PATH}
       dockerfile: Dockerfile
     image: django-web:latest
     restart: unless-stopped

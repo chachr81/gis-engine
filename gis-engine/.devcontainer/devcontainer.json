@@ -1,0 +1,18 @@
+{
+	"name": "GIS Engine Dev",
+	"dockerComposeFile": [
+		"../../docker-compose.portal_example.yml",
+        "../../docker-compose.yml" 
+	],
+	"service": "gis-engine",
+	"workspaceFolder": "/workspaces/docker_data/gis-engine",
+    "shutdownAction": "none",
+	"remoteUser": "root",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    }
+}
